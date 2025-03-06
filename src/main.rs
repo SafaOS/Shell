@@ -199,6 +199,31 @@ impl Shell {
 }
 
 fn main() {
+    print!("\x1B[38;2;255;192;203m");
+    print!(
+        r#"
+ ,---.             ,---.           ,-----.   ,---.   
+'   .-'   ,--,--. /  .-'  ,--,--. '  .-.  ' '   .-'  
+`.  `-.  ' ,-.  | |  `-, ' ,-.  | |  | |  | `.  `-.  
+.-'    | \ '-'  | |  .-' \ '-'  | '  '-'  ' .-'    | 
+`-----'   `--`--' `--'    `--`--'  `-----'  `-----'  
+        "#,
+    );
+
+    print!("\x1B[38;2;200;200;200m");
+    print!(
+        r#"
+| Welcome to SafaOS!
+| you are currently in ram:/, a playground
+| init ramdisk has been mounted at sys:/
+| sys:/bin is avalible in your PATH check it out for some binaries
+| the command `help` will provide a list of builtin commands and some terminal usage guide
+        "#
+    );
+
+    println!("\x1B[0m");
+
     let shell = Shell::new();
+
     shell.run();
 }

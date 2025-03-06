@@ -22,4 +22,14 @@ pub static BUILTIN_COMMANDS: BuiltInCommandList = phf_map! {
         std::env::set_current_dir(args[0])?;
         Ok(())
     },
+    "help" => |_, _| {
+        println!("Builtin commands:");
+        for (name, _) in &BUILTIN_COMMANDS {
+            println!("- {name}");
+        }
+        println!("Terminal usage:");
+        println!("- PageUp/PageDown: scroll up/down");
+        println!("- Ctrl+Shift+C: clear screen");
+        Ok(())
+    },
 };
