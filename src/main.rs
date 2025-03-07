@@ -199,29 +199,44 @@ impl Shell {
 }
 
 fn main() {
-    print!("\x1B[38;2;255;192;203m");
-    print!(
-        r#"
+    let mut args = std::env::args();
+    let mut interactive = false;
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-i" | "--interactive" => interactive = true,
+            "--help" => {
+                println!("usage: shell [-i|--interactive]");
+                return;
+            }
+            _ => {}
+        }
+    }
+    if interactive {
+        print!("\x1B[38;2;255;192;203m");
+        print!(
+            r#"
  ,---.             ,---.           ,-----.   ,---.   
 '   .-'   ,--,--. /  .-'  ,--,--. '  .-.  ' '   .-'  
 `.  `-.  ' ,-.  | |  `-, ' ,-.  | |  | |  | `.  `-.  
 .-'    | \ '-'  | |  .-' \ '-'  | '  '-'  ' .-'    | 
 `-----'   `--`--' `--'    `--`--'  `-----'  `-----'  
         "#,
-    );
+        );
 
-    print!("\x1B[38;2;200;200;200m");
-    print!(
-        r#"
+        print!("\x1B[38;2;200;200;200m");
+        print!(
+            r#"
 | Welcome to SafaOS!
 | you are currently in ram:/, a playground
 | init ramdisk has been mounted at sys:/
 | sys:/bin is avalible in your PATH check it out for some binaries
 | the command `help` will provide a list of builtin commands and some terminal usage guide
         "#
-    );
+        );
 
-    println!("\x1B[0m");
+        println!("\x1B[0m");
+    }
 
     let shell = Shell::new();
 
