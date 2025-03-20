@@ -14,7 +14,7 @@ use cfg_if::cfg_if;
 // support on both the host system and SafaOS
 cfg_if! {
     if #[cfg(target_os = "safaos")] {
-        use std::os::safaos::errors::ErrorStatus;
+        use safa_api::errors::ErrorStatus;
         pub enum OSError {
             Known(ErrorStatus),
             Unknown(usize),
@@ -24,7 +24,11 @@ cfg_if! {
             fn from(status: ExitStatus) -> Self {
                 assert!(!status.success());
                 let code = status.code().unwrap_or(1);
-                let error_status = ErrorStatus::try_from(code);
+                if code > u16::MAX as i32 {
+                    return OSError::Unknown(code as usize);
+                }
+
+                let error_status = ErrorStatus::try_from(code as u16);
                 match error_status {
                     Ok(err) => OSError::Known(err),
                     Err(()) => OSError::Unknown(code as usize),
@@ -34,7 +38,7 @@ cfg_if! {
 
         impl From<io::Error> for OSError {
             fn from(err: io::Error) -> Self {
-                OSError::Known(ErrorStatus::from_io_error_kind(err.kind()))
+                OSError::Known(safa_api::errors::err_from_io_error_kind(err.kind()))
             }
         }
     } else {

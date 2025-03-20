@@ -89,7 +89,23 @@ version = "0.1.0"
 dependencies = [
  "cfg-if",
  "phf",
+ "safa-api",
  "thiserror",
+]
+
+[[package]]
+name = "safa-abi"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98006e8f0b2c5e080173dead429060fe691e28b670e9bb4a4695810d0f597553"
+
+[[package]]
+name = "safa-api"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a695660120af507b2fc52c0e86f99df08248d81ce7eec6e957ced2d964359ca"
+dependencies = [
+ "safa-abi",
 ]
 
 [[package]]
