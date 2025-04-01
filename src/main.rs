@@ -6,8 +6,10 @@ use std::{
     process::{Command, ExitStatus},
 };
 
+use lexer::Lexer;
 use thiserror::Error;
 mod builtin;
+mod lexer;
 use cfg_if::cfg_if;
 
 // There is kinda of no need to use this, but it's nice to have
@@ -171,12 +173,12 @@ impl Shell {
     }
 
     fn execute(&mut self, input: &str) -> Result<(), ShellError> {
-        let mut command = input.split_whitespace();
+        let mut command = Lexer::new(input).map(|token| token.as_str());
         let Some(program) = command.next() else {
             return Ok(());
         };
-        let args = command.collect::<Vec<_>>();
 
+        let args = command.collect::<Vec<_>>();
         if let Some(f) = builtin::BUILTIN_COMMANDS.get(program) {
             return f(self, &args);
         }
