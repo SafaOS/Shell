@@ -1,5 +1,10 @@
+const MULTI_PATH_SEP: &str = if cfg!(any(target_os = "windows", target_os = "safaos")) {
+    ";"
+} else {
+    ":"
+};
+
 use std::{
-    collections::HashMap,
     fmt::Display,
     io::{self, Write},
     path::Path,
@@ -78,8 +83,6 @@ impl Display for OSError {
 struct Shell {
     stdin: io::Stdin,
     stdout: io::Stdout,
-    // Env vars because SafaOS doesn't have them yet
-    env: HashMap<String, String>,
     last_command_failure: Option<OSError>,
 }
 
@@ -109,11 +112,6 @@ impl Shell {
         Shell {
             stdin: io::stdin(),
             stdout: io::stdout(),
-            env: if cfg!(target_os = "safaos") {
-                HashMap::from([(String::from("PATH"), String::from("sys:/bin"))])
-            } else {
-                HashMap::new()
-            },
             last_command_failure: None,
         }
     }
@@ -138,10 +136,7 @@ impl Shell {
     }
 
     fn execute_program(&self, program: &str, args: &[&str]) -> Result<(), ShellError> {
-        let env_path = self
-            .env
-            .get("PATH")
-            .expect("Failed to get the PATH Environment variable");
+        let path = std::env::var("PATH").expect("Failed to get the PATH Environment variable");
 
         let handle_child = |mut child: std::process::Child| {
             let results = child.wait()?;
@@ -152,7 +147,7 @@ impl Shell {
             }
         };
 
-        let path = env_path.split(';');
+        let path = path.split(MULTI_PATH_SEP);
 
         for dir in path {
             let path = Path::new(dir);
@@ -222,11 +217,11 @@ fn main() {
         print!("\x1B[38;2;255;192;203m");
         print!(
             r#"
- ,---.             ,---.           ,-----.   ,---.   
-'   .-'   ,--,--. /  .-'  ,--,--. '  .-.  ' '   .-'  
-`.  `-.  ' ,-.  | |  `-, ' ,-.  | |  | |  | `.  `-.  
-.-'    | \ '-'  | |  .-' \ '-'  | '  '-'  ' .-'    | 
-`-----'   `--`--' `--'    `--`--'  `-----'  `-----'  
+ ,---.             ,---.           ,-----.   ,---.
+'   .-'   ,--,--. /  .-'  ,--,--. '  .-.  ' '   .-'
+`.  `-.  ' ,-.  | |  `-, ' ,-.  | |  | |  | `.  `-.
+.-'    | \ '-'  | |  .-' \ '-'  | '  '-'  ' .-'    |
+`-----'   `--`--' `--'    `--`--'  `-----'  `-----'
         "#,
         );
 
@@ -236,7 +231,7 @@ fn main() {
 | Welcome to SafaOS!
 | you are currently in ram:/, a playground
 | init ramdisk has been mounted at sys:/
-| sys:/bin is avalible in your PATH check it out for some binaries
+| sys:/bin is available in your PATH check it out for some binaries
 | the command `help` will provide a list of builtin commands and some terminal usage guide
         "#
         );
