@@ -137,6 +137,7 @@ impl Shell {
 
     fn execute_program(&self, program: &str, args: &[&str]) -> Result<(), ShellError> {
         let path = std::env::var("PATH").expect("Failed to get the PATH Environment variable");
+        let cwd = std::env::current_dir().expect("Failed to get CWD");
 
         let handle_child = |mut child: std::process::Child| {
             let results = child.wait()?;
@@ -148,18 +149,19 @@ impl Shell {
         };
 
         let path = path.split(MULTI_PATH_SEP);
+        let path = path.map(|p| Path::new(p));
+        let path = path.chain([cwd.as_path()].into_iter());
 
         for dir in path {
-            let path = Path::new(dir);
-            let program_path = path.join(program);
-            // we currently have no way to check if the file exists so we have to do this:
+            let program_path = dir.join(program);
+            if !program_path.exists() {
+                continue;
+            }
+
             let command = Command::new(program_path).args(args).spawn();
             match command {
                 Ok(child) => return handle_child(child),
-                Err(err) => match err.kind() {
-                    io::ErrorKind::NotFound | io::ErrorKind::IsADirectory => continue,
-                    _ => return Err(ShellError::IoError(err)),
-                },
+                Err(err) => return Err(ShellError::IoError(err)),
             }
         }
 
@@ -172,8 +174,11 @@ impl Shell {
         let Some(program) = command.next() else {
             return Ok(());
         };
+        let program = program.as_ref();
 
         let args = command.collect::<Vec<_>>();
+        let args = args.iter().map(|t| t.as_ref()).collect::<Vec<_>>();
+
         if let Some(f) = builtin::BUILTIN_COMMANDS.get(program) {
             return f(self, &args);
         }
