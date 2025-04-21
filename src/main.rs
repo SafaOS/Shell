@@ -199,20 +199,45 @@ impl Shell {
     }
 }
 
-fn main() {
+fn main() -> Result<(), ()> {
+    unsafe {
+        std::env::set_var("SHELL", "sys:/bin/safa");
+    }
+
     let mut args = std::env::args();
+    let program = args.next().expect("no program name passed");
+
     let mut interactive = false;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-i" | "--interactive" => interactive = true,
-            "--help" => {
-                println!("usage: shell [-i|--interactive]");
-                return;
+            "-c" => {
+                let Some(command) = args.next() else {
+                    println!("{program}: `-c` expected command");
+                    return Err(());
+                };
+
+                let mut shell = Shell::new();
+                return if let Err(err) = shell.execute(command.as_str()) {
+                    println!("{program}: {err}");
+                    Err(())
+                } else {
+                    Ok(())
+                };
             }
-            _ => {}
+            "--help" => {
+                println!("usage: {program} [-i|--interactive|-c [command]]");
+                return Ok(());
+            }
+            el => {
+                println!("{program}: unexpected argument `{el}`");
+                println!("usage: {program} [-i|--interactive|-c [command]]");
+                return Err(());
+            }
         }
     }
+
     if interactive {
         print!("\x1B[38;2;255;192;203m");
         print!(
@@ -240,6 +265,6 @@ fn main() {
     }
 
     let shell = Shell::new();
-
     shell.run();
+    Ok(())
 }
