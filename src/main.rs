@@ -263,6 +263,7 @@ fn main() -> Result<(), ()> {
 | init ramdisk has been mounted at sys:/
 | sys:/bin is available in your PATH check it out for some binaries
 | the command `help` will provide a list of builtin commands and some terminal usage guide
+| to start GUI type opal-wm, ctrl+shift+T will open a terminal, to drag a window hold ctrl and the window.
         "#
         );
 
