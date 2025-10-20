@@ -8,4 +8,4 @@ cfg-if = "1.0.0"
 phf = { version = "0.11.3", features = ["macros"] }
 thiserror = "2.0.12"
 [target.'cfg(target_os = "safaos")'.dependencies]
-safa-api = { version = "0.3.0", features = ["std"] }
+safa-api = { version = "0.4.3", git = "https://github.com/SafaOS/safa-api", features = ["std"] }

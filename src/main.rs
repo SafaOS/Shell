@@ -22,60 +22,59 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(target_os = "safaos")] {
         use safa_api::errors::ErrorStatus;
-        pub enum OSError {
+        pub enum OSReturn {
             Known(ErrorStatus),
-            Unknown(usize),
+            Unknown(isize),
         }
 
-        impl From<ExitStatus> for OSError {
+        impl From<ExitStatus> for OSReturn {
             fn from(status: ExitStatus) -> Self {
-                assert!(!status.success());
-                let code = status.code().unwrap_or(1);
-                if code > u16::MAX as i32 {
-                    return OSError::Unknown(code as usize);
+                let code = status.code().unwrap_or(0);
+                if code.is_positive() || code == 0 || status.success() {
+                    return OSReturn::Unknown(code as isize);
                 }
 
-                let error_status = ErrorStatus::try_from(code as u16);
+                let error_status = ErrorStatus::try_from((-code) as u16);
                 match error_status {
-                    Ok(err) => OSError::Known(err),
-                    Err(()) => OSError::Unknown(code as usize),
+                    Ok(err) => OSReturn::Known(err),
+                    Err(()) => OSReturn::Unknown(code as isize),
                 }
             }
         }
 
-        impl From<io::Error> for OSError {
+        impl From<io::Error> for OSReturn {
             fn from(err: io::Error) -> Self {
-                OSError::Known(safa_api::errors::err_from_io_error_kind(err.kind()))
+                OSReturn::Known(safa_api::errors::err_from_io_error_kind(err.kind()))
             }
         }
     } else {
         use std::convert::Infallible;
-        pub enum OSError {
+        pub enum OSReturn {
             Known(Infallible),
             Unknown(usize),
         }
 
-        impl From<ExitStatus> for OSError {
+        impl From<ExitStatus> for OSReturn {
             fn from(status: ExitStatus) -> Self {
                 assert!(!status.success());
-                let code = status.code().unwrap_or(1);
-                OSError::Unknown(code as usize)
+                let code = status.code().unwrap_or(0);
+                Self::Unknown(code as usize)
             }
         }
 
-        impl From<io::Error> for OSError {
+        impl From<io::Error> for OSReturn {
             fn from(err: io::Error) -> Self {
-                OSError::Unknown(1)
+                Self::Unknown(1)
             }
         }
     }
 }
 
-impl Display for OSError {
+impl Display for OSReturn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OSError::Known(err) => write!(f, "{err:?}"),
-            OSError::Unknown(code) => write!(f, "{code}"),
+            OSReturn::Known(err) => write!(f, "{err:?}"),
+            OSReturn::Unknown(code) => write!(f, "{code}"),
         }
     }
 }
@@ -83,7 +82,7 @@ impl Display for OSError {
 struct Shell {
     stdin: io::Stdin,
     stdout: io::Stdout,
-    last_command_failure: Option<OSError>,
+    last_command_return: Option<OSReturn>,
 }
 
 #[derive(Debug, Error)]
@@ -97,12 +96,12 @@ pub enum ShellError {
     BuiltinError,
 }
 
-impl From<ShellError> for OSError {
+impl From<ShellError> for OSReturn {
     fn from(err: ShellError) -> Self {
         match err {
-            ShellError::IoError(err) => OSError::from(err),
-            ShellError::ExitError(status) => OSError::from(status),
-            ShellError::BuiltinError => OSError::Unknown(1),
+            ShellError::IoError(err) => OSReturn::from(err),
+            ShellError::ExitError(status) => OSReturn::from(status),
+            ShellError::BuiltinError => OSReturn::Unknown(-1),
         }
     }
 }
@@ -112,7 +111,7 @@ impl Shell {
         Shell {
             stdin: io::stdin(),
             stdout: io::stdout(),
-            last_command_failure: None,
+            last_command_return: None,
         }
     }
 
@@ -120,8 +119,8 @@ impl Shell {
         let cwd = std::env::current_dir().expect("Failed to get current directory");
 
         print!("\x1b[35m{}\x1b[0m ", cwd.display());
-        if let Some(err) = &self.last_command_failure {
-            print!("\x1b[31m[{err}]\x1b[0m ");
+        if let Some(code) = &self.last_command_return {
+            print!("\x1b[31m[{code}]\x1b[0m ");
         }
         print!("# ");
 
@@ -135,7 +134,7 @@ impl Shell {
         input
     }
 
-    fn execute_program(&self, program: &str, args: &[&str]) -> Result<(), ShellError> {
+    fn execute_program(&self, program: &str, args: &[&str]) -> Result<u32, ShellError> {
         let path = std::env::var("PATH").expect("Failed to get the PATH Environment variable");
         let cwd = std::env::current_dir().expect("Failed to get CWD");
 
@@ -144,7 +143,7 @@ impl Shell {
             if !results.success() {
                 Err(ShellError::ExitError(results))
             } else {
-                Ok(())
+                Ok(results.code().unwrap_or(0) as u32)
             }
         };
 
@@ -169,10 +168,10 @@ impl Shell {
         handle_child(command)
     }
 
-    fn execute(&mut self, input: &str) -> Result<(), ShellError> {
+    fn execute(&mut self, input: &str) -> Result<u32, ShellError> {
         let mut command = Lexer::new(input).map(|token| token.as_str());
         let Some(program) = command.next() else {
-            return Ok(());
+            return Ok(0);
         };
         let program = program.as_ref();
 
@@ -180,7 +179,7 @@ impl Shell {
         let args = args.iter().map(|t| t.as_ref()).collect::<Vec<_>>();
 
         if let Some(f) = builtin::BUILTIN_COMMANDS.get(program) {
-            return f(self, &args);
+            return f(self, &args).map(|()| 0);
         }
 
         self.execute_program(program, &args)
@@ -189,16 +188,20 @@ impl Shell {
     fn run(mut self) {
         loop {
             let input = self.prompt();
-            if let Err(err) = self.execute(&input) {
-                if !matches!(err, ShellError::ExitError(_))
-                    && !matches!(err, ShellError::BuiltinError)
-                {
-                    println!("Shell: {err}");
-                }
+            match self.execute(&input) {
+                Err(err) => {
+                    if !matches!(err, ShellError::ExitError(_))
+                        && !matches!(err, ShellError::BuiltinError)
+                    {
+                        println!("Shell: {err}");
+                    }
 
-                self.last_command_failure = Some(err.into());
-            } else {
-                self.last_command_failure = None;
+                    self.last_command_return = Some(err.into());
+                }
+                Ok(code) => {
+                    self.last_command_return =
+                        (code > 0).then_some(OSReturn::Unknown(code as isize));
+                }
             }
         }
     }
