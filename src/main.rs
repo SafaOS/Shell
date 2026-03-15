@@ -51,14 +51,14 @@ cfg_if! {
         use std::convert::Infallible;
         pub enum OSReturn {
             Known(Infallible),
-            Unknown(usize),
+            Unknown(isize),
         }
 
         impl From<ExitStatus> for OSReturn {
             fn from(status: ExitStatus) -> Self {
                 assert!(!status.success());
                 let code = status.code().unwrap_or(0);
-                Self::Unknown(code as usize)
+                Self::Unknown(code as isize)
             }
         }
 
