@@ -6,16 +6,24 @@ const MULTI_PATH_SEP: &str = if cfg!(any(target_os = "windows", target_os = "saf
 
 use std::{
     fmt::Display,
-    io::{self, Write},
+    io::{self},
     path::Path,
     process::{Command, ExitStatus},
 };
 
 use lexer::Lexer;
+use noline::{
+    builder::EditorBuilder, history::UnboundedHistory, line_buffer::UnboundedBuffer,
+    sync_editor::Editor,
+};
 use thiserror::Error;
 mod builtin;
 mod lexer;
+mod readline;
+
 use cfg_if::cfg_if;
+
+use crate::readline::IOWrapper;
 
 // There is kinda of no need to use this, but it's nice to have
 // support on both the host system and SafaOS
@@ -80,8 +88,8 @@ impl Display for OSReturn {
 }
 
 struct Shell {
-    stdin: io::Stdin,
-    stdout: io::Stdout,
+    io: IOWrapper,
+    editor: Editor<UnboundedBuffer, UnboundedHistory>,
     last_command_return: Option<OSReturn>,
 }
 
@@ -108,30 +116,35 @@ impl From<ShellError> for OSReturn {
 
 impl Shell {
     fn new() -> Shell {
+        let mut io = IOWrapper::new();
+
+        let editor = EditorBuilder::new_unbounded()
+            .with_unbounded_history()
+            .build_sync(&mut io)
+            .unwrap();
+
         Shell {
-            stdin: io::stdin(),
-            stdout: io::stdout(),
+            io,
+            editor,
             last_command_return: None,
         }
     }
 
     fn prompt(&mut self) -> String {
+        use std::fmt::Write;
         let cwd = std::env::current_dir().expect("Failed to get current directory");
 
-        print!("\x1b[35m{}\x1b[0m ", cwd.display());
+        let mut prompt = String::new();
+        write!(prompt, "\x1b[35m{}\x1b[0m ", cwd.display()).unwrap();
         if let Some(code) = &self.last_command_return {
-            print!("\x1b[31m[{code}]\x1b[0m ");
+            write!(prompt, "\x1b[31m[{code}]\x1b[0m ").unwrap();
         }
-        print!("# ");
+        write!(prompt, "# ").unwrap();
 
-        self.stdout.flush().expect("Failed to flush stdout");
-
-        let mut input = String::new();
-        self.stdin
-            .read_line(&mut input)
-            .expect("Failed to read line from stdin");
-
-        input
+        self.editor
+            .readline(&*prompt, &mut self.io)
+            .expect("Failed to readline")
+            .to_string()
     }
 
     fn execute_program(&self, program: &str, args: &[&str]) -> Result<u32, ShellError> {
@@ -273,6 +286,10 @@ fn main() -> Result<(), ()> {
         println!("\x1B[0m");
     }
 
+    assert!(
+        readline::enter_raw_mode(),
+        "FIXME: Shell isn't supported on targets without raw mode"
+    );
     let shell = Shell::new();
     shell.run();
     Ok(())
