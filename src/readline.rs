@@ -57,25 +57,6 @@ impl EmbRead for IOWrapper {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         Ok(self.stdin.read(buf).map_err(|e| e.kind())?)
     }
-
-    #[cfg(target_os = "safaos")]
-    fn read_exact(
-        &mut self,
-        mut buf: &mut [u8],
-    ) -> Result<(), embedded_io::ReadExactError<Self::Error>> {
-        while !buf.is_empty() {
-            match self.read(buf) {
-                Ok(0) => continue,
-                Ok(n) => buf = &mut buf[n..],
-                Err(e) => return Err(embedded_io::ReadExactError::Other(e)),
-            }
-        }
-        if buf.is_empty() {
-            Ok(())
-        } else {
-            Err(embedded_io::ReadExactError::UnexpectedEof)
-        }
-    }
 }
 
 impl EmbWrite for IOWrapper {
